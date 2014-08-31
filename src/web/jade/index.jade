@@ -1,0 +1,22 @@
+
+extends ./lib/layout.jade
+include ./lib/mixin.jade
+
+block init
+  -var title="NINJAM Web Chat"
+
+block header
+  script(src="./js/app.js")
+  link(rel="stylesheet", href="./css/app.css")
+
+block contents
+  .container
+    h1 #{title}
+    form.form-inline#chat-area(role="form")
+      .input-group
+        label.input-group-addon#user-name
+          i.fa.fa-user &nbsp;
+        input#text-box.form-control(type="text", placeholder="message")
+        span.input-group-addon#send-button(role="button") Send
+    ul.list-unstyled#chat-history
+  script(src="./js/client.js")

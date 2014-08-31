@@ -1,0 +1,18 @@
+doctype
+-var lang="en"
+-var charset="utf-8"
+-var title="Untitled"
+-var author="tea"
+-var description="NINJAM WebChat"
+-var keywords="ninjam"
+-var info={author:author, description:description, keywords:keywords}
+
+block init
+html(lang=lang)
+  head
+    +meta-pageinfo(info)
+    +import-lib
+    block header
+    title=title
+  body
+    block contents

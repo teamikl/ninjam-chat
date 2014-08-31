@@ -1,0 +1,29 @@
+
+body {
+  padding-top: 50px;
+  padding-bottom: 20px;
+}
+.container {
+  max-width: 768px;
+}
+#chat-area {
+  margin-bottom: 15px;
+}
+#send-button {
+  cursor: pointer;
+}
+#user-name {
+  &:focus {
+    background-color: white;
+  }
+  &:not(:focus) {
+    background-color: whitesmoke;
+  }
+}
+.meta {
+  color: #999;
+  font-size: 0.9em;
+}
+.chat-time {
+  margin-left: 15px;
+}
