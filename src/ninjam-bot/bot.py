@@ -149,9 +149,8 @@ def ninjam_bot(Q, ninjam, irc):
             if __debug__:
                 Logger.debug("{} {:08x} {:08x}".format(
                     challenge, servercaps, protover))
-            if 0x0002ffff >= protover >= 0x00020000 and (
-                    servercaps == 1 or servercaps == 1e01):
-                # XXX: ninbot.com servercaps 1e01
+            if 0x0002ffff >= protover >= 0x00020000 and servercaps == 1:
+                # XXX: ninbot.com servercaps 0x1e01
                 passhash = hashlib.sha1(username + b":" + password).digest()
                 passhash = hashlib.sha1(passhash + challenge).digest()
                 # CLIENT AUTH USER
@@ -253,27 +252,36 @@ def irc_bot(Q, irc):
 
 
 def message_loop(queue, bot):
+    """
+
+    TODO: Observer pattern for multi notification
+    """
     untuple = lambda x, *xs: (x, xs)
 
+    #ws = bot.ws
     gui = bot.gui
     irc = bot.irc
     ninjam = bot.ninjam
 
     while True:
         target, rest = untuple(*queue.get())
-        if __debug__:
-            Logger.debug("QUEUE: {}".format(target))
+        try:
+            if __debug__:
+                Logger.debug("QUEUE: {}".format(target))
 
-        if target == "NINJAM" and ninjam:
-            ninjam.sendmsg(*rest)
-        elif target == "IRC" and irc:
-            irc.sendline(*rest)
-        elif target == "GUI" and gui:
-            action, args = untuple(*rest)
-            method = getattr(gui, action, None)
-            if method:
-                method(*args)
-        queue.task_done()
+            if target == "NINJAM" and ninjam:
+                ninjam.sendmsg(*rest)
+            elif target == "IRC" and irc:
+                irc.sendline(*rest)
+            elif target == "WS" and ws:
+                ws.sendmsg(*res)
+            elif target == "GUI" and gui:
+                action, args = untuple(*rest)
+                method = getattr(gui, action, None)
+                if method:
+                    method(*args)
+        finally:
+            queue.task_done()
 
 
 def start_web_server(app, config):
@@ -377,23 +385,36 @@ class AdminWeb:
 
 
 class Bot:
-    __slots__ = ['gui', 'irc', 'ninjam', 'queue']
-
-    def __init__(self, irc=None, ninjam=None, gui=None, queue=None):
+    def __init__(self, irc=None, ninjam=None, gui=None, ws=None, queue=None):
+        self.ws = ws
         self.gui = gui
         self.irc = irc
         self.ninjam = ninjam
-        self.queue = queue  # XXX: no used now
+        self.queue = queue
+
+    def send_websocket_chat_msg(self, type, user, text=""):
+        if self.ws:
+            return
+        # type: chat, join, part
+        # user: username
+        # time: (server add)
+        # text: (message for type: chat)
+        msg = {'type': type, 'user': 'BOT'}  # TODO: user
+        if msg:
+            msg["text"] = text
+        self.queue.put(("WS", msg))
 
     def send_ninjam_chat_msg(self, msg):
         if self.ninjam:
-            chunk = "MSG\x00{}\x00".format(msg)
-            self.queue.put(("NINJAM", 0xc0, chunk.encode("utf-8")))
+            return
+        chunk = "MSG\x00{}\x00".format(msg)
+        self.queue.put(("NINJAM", 0xc0, chunk.encode("utf-8")))
 
     def send_irc_chat_msg(self, msg):
         if self.irc:
-            line = "PRIVMSG {} :{}".format(self.irc.channel, msg)
-            self.queue.put(("IRC", line.strip()))
+            return
+        line = "PRIVMSG {} :{}".format(self.irc.channel, msg)
+        self.queue.put(("IRC", line.strip()))
 
 
 def main():
@@ -411,6 +432,7 @@ def main():
     ninjam_config = config['ninjam']
     irc_config = config['irc']
     httpd_config = config['httpd']
+    ws_config = config['ws']
     config_enable = config['enable']
 
     # Init command line arguments parser
@@ -449,14 +471,10 @@ def main():
     bot = Bot(queue=queue)
     shell = AdminShell(bot=bot)
 
-    def _make_daemon(init):
-        def _init_daemon(**kw):
-            obj = init(**kw)
-            obj.setDaemon(True)
-            return obj
-        return _init_daemon
-    make_daemon_thread = _make_daemon(Thread)
-    make_daemon_process = _make_daemon(Process)
+    def make_daemon_thread(**kw):
+        thread = Thread(**kw)
+        thread.setDaemon(True)
+        return thread
 
     if int(config_enable['tk']):
         gui = bot.gui = AdminGui(queue=queue, shell=shell, bot=bot)
@@ -487,14 +505,20 @@ def main():
             target=start_web_server, args=(app, dict(httpd_config)))
         httpd_thread.start()
 
-    if int(config_enable['ws']):
-        # TODO
-        pass
-
     if 1:  # Worker thread should always be enable
         worker_thread = make_daemon_thread(
             target=message_loop, args=(queue, bot))
         worker_thread.start()
+
+    if int(config_enable['ws']):
+        import ws_chat_client
+        ws_process = Process(
+            target=ws_chat_client.worker,
+            daemon=True,
+            args=(queue, dict(ws_config)))
+        ws_process.start()
+        ws_process.join()
+
 
     if gui:
         gui.mainloop()
