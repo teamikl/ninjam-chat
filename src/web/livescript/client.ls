@@ -1,11 +1,17 @@
 # chat client
 $ !->
+
+  # TODO: config
+  ws = new
+    @host = \localhost
+    @port = 6789
+
   userName = 'Guest' + Math.floor Math.random! * 100
 
   close_button = ->
     $ '<button/>' .addClass \close .attr {type: \button, 'data-dismiss': \alert} .append \x
 
-  ws = new WebSocket('ws://localhost:6789/')
+  ws = new WebSocket("ws://#{ws.host}:#{ws.port}/")
   ws.onerror = (e) !->
     $(\#chat-area).empty!
       .addClass 'alert alert-error'

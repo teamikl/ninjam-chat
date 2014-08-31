@@ -41,15 +41,20 @@ gulp.task \watch !->
   gulp.watch <[ ./src/web/less/*.less ]> <[ build-less ]>
   gulp.watch <[ ./src/web/livescript/*.ls ]> <[ build-livescript ]>
 
-gulp.task \connect !->
+gulp.task \server !->
   # TODO: ./dist
   # TODO: copy required resource from bower
   gulp-connect.server do
     root: './'
     livereload: true
 
+gulp.task \server-public !->
+  gulp-connect.server do
+    root: [__dirname]
+    host: '0.0.0.0'
+
 gulp.task \clean !->
   gulp.src <[ ./app/*.* ./app/js/*.js ]>
     .pipe gulp.clean!
 
-gulp.task \default <[ connect watch ]>
+gulp.task \default <[ server watch ]>
