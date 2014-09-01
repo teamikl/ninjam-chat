@@ -37,7 +37,7 @@ gulp.task \build-less !->
 gulp.task \build <[ build-jade build-less build-livescript ]>
 
 gulp.task \watch !->
-  gulp.watch <[ ./src/web/jade/*.jade ]> <[ build-jade ]>
+  gulp.watch <[ ./src/web/jade/*.jade ./src/web/jade/**/*.jade ]> <[ build-jade ]>
   gulp.watch <[ ./src/web/less/*.less ]> <[ build-less ]>
   gulp.watch <[ ./src/web/livescript/*.ls ]> <[ build-livescript ]>
 

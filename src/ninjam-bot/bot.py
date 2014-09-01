@@ -32,6 +32,7 @@ try:
 except ImportError:
     from ConfigParser import ConfigParser
 
+from util import ws_build_msg, ws_parse_msg, queue_loop
 
 Logger = logging.getLogger(__file__)
 
@@ -189,6 +190,7 @@ def ninjam_bot(Q, ninjam, irc):
                     Q.put(("GUI",
                            "add_line",
                            "{}@NINJAM> {}".format(username, message)))
+                    Q.put(("WS", "text", username, message))
             elif mode == b"JOIN":
                 ninjam.users[sender] = 1
                 if irc:
@@ -197,6 +199,7 @@ def ninjam_bot(Q, ninjam, irc):
                     Q.put(("IRC", "PRIVMSG {} :{}".format(
                         irc.channel, msg)))
                     Logger.info(msg)
+                Q.put(("WS", "join", sender))
             elif mode == b"PART":
                 del ninjam.users[sender]
                 if irc:
@@ -204,6 +207,7 @@ def ninjam_bot(Q, ninjam, irc):
                     Q.put(("IRC", "PRIVMSG {} :{}".format(
                         irc.channel, msg)))
                     Logger.info(msg)
+                Q.put(("WS", "part", sender))
             del params, mode, sender, message
         elif msgtype == 0xfd:  # KEEP-ALIVE
             Q.put(("NINJAM", 0xfd, b""))
@@ -222,23 +226,29 @@ def irc_bot(Q, irc):
             Logger.debug(repr(line))
         if line.startswith(":"):
             sender, msgtype, rest = line.split(" ", 2)
-            if "End of /MOTD command." in rest:  # XXX
+            username = sender_name(sender)
+            if "End of MOTD command." in rest:  # XXX
+                # /MOTD or MOTD
+                # or capture ':name ODE name :args'
                 irc.connected = True
                 Q.put(("IRC", "JOIN {}".format(irc.channel)))
             elif msgtype == "PRIVMSG":
+                # NOTE: channel or private ?
                 _, msg = rest.split(" ", 1)
                 message = msg.lstrip(":").strip()
                 chunk = "MSG\x00{}@IRC: {}\x00".format(
-                    sender_name(sender), message)
+                    username, message)
                 Q.put(("NINJAM", 0xc0, chunk.encode("utf-8")))
                 Q.put(("GUI", "add_line",
-                       "{}@IRC> {}".format(sender_name(sender), message)))
+                       "{}@IRC> {}".format(username, message)))
+                Q.put((">WS", "chat", username, message))
             elif msgtype == "JOIN" or msgtype == "PART":
+                username = sender_name(sender)
                 key = "{}_msg".format(msgtype.lower())
-                msg = irc.config[key].format(
-                    username=sender_name(sender))
+                msg = irc.config[key].format(username=username)
                 chunk = "MSG\x00{}\x00".format(msg)
                 Q.put(("NINJAM", 0xc0, chunk.encode("utf-8")))
+                Q.put((">WS", msgtype.lower(), username))
                 Logger.info(msg)
                 del key, msg, chunk
             else:
@@ -253,35 +263,53 @@ def irc_bot(Q, irc):
 
 def message_loop(queue, bot):
     """
-
     TODO: Observer pattern for multi notification
     """
-    untuple = lambda x, *xs: (x, xs)
 
-    #ws = bot.ws
+    # Timing issue, this message_loop()
+    # must be called at the end of threads initializations.
+    ws = bot.ws
     gui = bot.gui
     irc = bot.irc
     ninjam = bot.ninjam
 
-    while True:
-        target, rest = untuple(*queue.get())
-        try:
-            if __debug__:
-                Logger.debug("QUEUE: {}".format(target))
+    for target, *rest in iter(queue.get, None):
+        if __debug__:
+            Logger.debug("QUEUE: {}".format(target))
 
-            if target == "NINJAM" and ninjam:
-                ninjam.sendmsg(*rest)
-            elif target == "IRC" and irc:
-                irc.sendline(*rest)
-            elif target == "WS" and ws:
-                ws.sendmsg(*res)
-            elif target == "GUI" and gui:
-                action, args = untuple(*rest)
-                method = getattr(gui, action, None)
-                if method:
-                    method(*args)
-        finally:
-            queue.task_done()
+        if "<WS" == target:
+            # XXX: bad for extensions.
+            packet = ws_parse_msg(rest[0])
+            msgtype = packet.get('type')
+            username = packet.get('user', 'anon')
+            text = packet.get('text', '')
+            msg = None
+            if msgtype == 'join' or msgtype == 'part':
+                msg = "{} {}".format(username, msgtype)
+            elif msgtype == 'chat':
+                msg = "{}> {}".format(username, text)
+
+            if irc:
+                bot.send_irc_chat_msg(msg)
+            if ninjam:
+                bot.send_ninjam_chat_msg(msg)
+            # TODO: >gui
+
+            del packet, msgtype, username, text
+            continue
+        elif target == ">WS" and ws:
+            bot.send_websocket_chat_msg(*rest)
+            continue
+
+        if target == "NINJAM" and ninjam:
+            ninjam.sendmsg(*rest)
+        elif target == "IRC" and irc:
+            irc.sendline(*rest)
+        elif target == "GUI" and gui:
+            action, args = untuple(*rest)
+            method = getattr(gui, action, None)
+            if method:
+                method(*args)
 
 
 def start_web_server(app, config):
@@ -392,26 +420,19 @@ class Bot:
         self.ninjam = ninjam
         self.queue = queue
 
-    def send_websocket_chat_msg(self, type, user, text=""):
-        if self.ws:
+    def send_websocket_chat_msg(self, *args):
+        if not self.ws:
             return
-        # type: chat, join, part
-        # user: username
-        # time: (server add)
-        # text: (message for type: chat)
-        msg = {'type': type, 'user': 'BOT'}  # TODO: user
-        if msg:
-            msg["text"] = text
-        self.queue.put(("WS", msg))
+        self.ws.put(ws_build_msg(*args))
 
     def send_ninjam_chat_msg(self, msg):
-        if self.ninjam:
+        if not self.ninjam:
             return
         chunk = "MSG\x00{}\x00".format(msg)
         self.queue.put(("NINJAM", 0xc0, chunk.encode("utf-8")))
 
     def send_irc_chat_msg(self, msg):
-        if self.irc:
+        if not self.irc:
             return
         line = "PRIVMSG {} :{}".format(self.irc.channel, msg)
         self.queue.put(("IRC", line.strip()))
@@ -444,7 +465,7 @@ def main():
     parser.add_argument(
         '--httpd',
         type=int,
-        default=8080,
+        default=0,
         help='enable httpd')
     parser.add_argument(
         '--ws',
@@ -505,20 +526,19 @@ def main():
             target=start_web_server, args=(app, dict(httpd_config)))
         httpd_thread.start()
 
+    if int(config_enable['ws']):
+        import ws_chat_client
+        ws_send_queue = bot.ws = Queue()
+        ws_process = Process(
+            target=ws_chat_client.worker,
+            daemon=True,
+            args=(queue, ws_send_queue, dict(ws_config)))
+        ws_process.start()
+
     if 1:  # Worker thread should always be enable
         worker_thread = make_daemon_thread(
             target=message_loop, args=(queue, bot))
         worker_thread.start()
-
-    if int(config_enable['ws']):
-        import ws_chat_client
-        ws_process = Process(
-            target=ws_chat_client.worker,
-            daemon=True,
-            args=(queue, dict(ws_config)))
-        ws_process.start()
-        ws_process.join()
-
 
     if gui:
         gui.mainloop()

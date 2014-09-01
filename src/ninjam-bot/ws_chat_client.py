@@ -2,17 +2,17 @@
 """
 """
 
-import json
 import logging
+from threading import Thread
+
 from autobahn.asyncio.websocket import (
     WebSocketClientProtocol,
     WebSocketClientFactory,
     )
 
+from util import ws_build_msg, queue_loop
+
 logger = logging.getLogger(__name__)
-
-
-# TODO: How to send to WSChatServer via Queue ?
 
 
 class WSChatClientProtocol(WebSocketClientProtocol):
@@ -21,25 +21,40 @@ class WSChatClientProtocol(WebSocketClientProtocol):
 
     def onOpen(self):
         logger.info('WebSocket connection open.')
-        self.sendMessage(json.dumps({'type': 'join', 'user': 'BOT'}).encode('utf-8'))
+        self.factory.client = self
+        self.factory.send_queue.put(ws_build_msg('join', 'BOT'))
 
     def onMessage(self, payload, isBinary):
         if __debug__:
             logger.debug("onMessage {} {} bytes".format("BINARY" if isBinary else "TEXT", len(payload)))
 
         if isBinary:
-            logger.info('Binary message received: {} bytes'.format(len(payload)))
+            if __debug__:
+                logger.info('Binary message received: {} bytes'.format(len(payload)))
         else:
-            logger.info('Text message received: {}'.format(payload.decode('utf-8')))
+            encoding = self.factory.encoding
+            if __debug__:
+                logger.info('Text message received: {}'.format(payload.decode(encoding)))
+                logger.debug("WS: {}".format(payload))
+            if self.factory.queue:
+                self.factory.queue.put(("<WS", payload.decode(encoding)))
 
     def onClose(self, wasClean, code, reason):
+        self.factory.client = None
+        self.factory.send_queue.put(ws_build_msg('part', 'BOT'))
         logger.info('WebSocket connection closed: {}'.format(reason))
 
 
-DEFAULT_WS_PORT = 6789
+# NOTE: use bot.cfg to override this settings.
+# here stay for default failback settings.
+DEFAULT_HOST = 'localhost'
+DEFAULT_PORT = 6789
+DEFAULT_ENCODING = 'utf-8'
 
-def worker(queue, config):
-    port = config.get('port', DEFAULT_WS_PORT)
+def worker(queue, send_queue, config):
+    host = config.get('host', DEFAULT_HOST)
+    port = config.get('port', DEFAULT_PORT)
+    encoding = config.get('encoding', DEFAULT_ENCODING)
 
     if 0:
         # debug asyncio
@@ -55,11 +70,24 @@ def worker(queue, config):
     logger.info("Start main")
 
     import asyncio
-    factory = WebSocketClientFactory('ws://localhost:{}'.format(port))
+    factory = WebSocketClientFactory('ws://{}:{}'.format(host, port))
+    factory.client = None
     factory.protocol = WSChatClientProtocol
+    factory.queue = queue
+    factory.encoding = encoding
+    factory.send_queue = send_queue
+
+    def ws_send_worker(queue, factory):
+        for payload in queue_loop(queue):
+            if __debug__:
+                logger.debug("payload-length: {}".format(len(payload)))
+            if factory.client:
+                factory.client.sendMessage(payload)
+    thread = Thread(target=ws_send_worker, args=(send_queue, factory), daemon=True)
+    thread.start()
 
     loop = asyncio.get_event_loop()
-    coro = loop.create_connection(factory, 'localhost', port)
+    coro = loop.create_connection(factory, host, port)
     loop.run_until_complete(coro)
     loop.run_forever()
     loop.close()
