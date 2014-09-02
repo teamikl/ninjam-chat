@@ -1,0 +1,12 @@
+{
+  "name": "ninjam-chat",
+  "version": "0.0.0",
+  "authors": [
+    "tea"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "bootstrap": "~3.2.0",
+    "font-awesome": "~4.2.0"
+  }
+}
