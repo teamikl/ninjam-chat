@@ -27,12 +27,9 @@ from struct import Struct, pack, unpack
 from socket import socket
 from threading import Thread
 from multiprocessing import Process, JoinableQueue as Queue
-try:
-    from configparser import ConfigParser
-except ImportError:
-    from ConfigParser import ConfigParser
+from configparser import ConfigParser
 
-from util import ws_build_msg, ws_parse_msg, queue_loop
+from util import ws_build_msg, ws_parse_msg, queue_loop, untuple
 
 Logger = logging.getLogger(__file__)
 
@@ -52,7 +49,7 @@ UserInfo = namedtuple(
 
 
 class NINJAMConnection:
-    def __init__(self, host, port, username, password, **config):
+    def __init__(self, host, port, username, password, encoding, **config):
         sock = socket()
         sock.connect((host, int(port)))
 
@@ -60,6 +57,7 @@ class NINJAMConnection:
         self._stream = sock.makefile("rb")
         self.username = username
         self.password = password
+        self.encoding = encoding
         self.config = config
         self.users = {}
 
@@ -179,35 +177,31 @@ def ninjam_bot(Q, ninjam, irc):
             if mode == b"MSG":
                 # NOTE: skip self message
                 username = sender.split("@", 1)[0]
-                message = message.decode("utf-8")
+                message = message.decode(ninjam.encoding, 'ignore')
                 if __debug__:
                     Logger.debug("{} {}".format(username, ninjam.username))
                 if username != ninjam.username.split(":")[-1]:
                     msg = "{}> {}".format(sender, message)
                     if irc:
-                        Q.put(("IRC",
-                               "PRIVMSG {} :{}".format(irc.channel, msg)))
-                    Q.put(("GUI",
-                           "add_line",
-                           "{}@NINJAM> {}".format(username, message)))
-                    Q.put(("WS", "text", username, message))
+                        Q.put(("IRC", "PRIVMSG {} :{}".format(irc.channel, msg)))
+                    Q.put(("GUI", "add_line", message))
+                    Q.put((">WS", "chat", username, message))
             elif mode == b"JOIN":
                 ninjam.users[sender] = 1
+                msg = ninjam.config["join_msg"].format(username=sender)
                 if irc:
-                    msg = ninjam.config["join_msg"].format(
-                        username=sender)
-                    Q.put(("IRC", "PRIVMSG {} :{}".format(
-                        irc.channel, msg)))
+                    Q.put(("IRC", "PRIVMSG {} :{}".format(irc.channel, msg)))
                     Logger.info(msg)
-                Q.put(("WS", "join", sender))
+                Q.put(("GUI", "add_line", msg))
+                Q.put((">WS", "join", sender))
             elif mode == b"PART":
                 del ninjam.users[sender]
+                msg = ninjam.config["part_msg"].format(username=sender)
                 if irc:
-                    msg = ninjam.config["part_msg"].format(username=sender)
-                    Q.put(("IRC", "PRIVMSG {} :{}".format(
-                        irc.channel, msg)))
+                    Q.put(("IRC", "PRIVMSG {} :{}".format(irc.channel, msg)))
                     Logger.info(msg)
-                Q.put(("WS", "part", sender))
+                Q.put(("GUI", "add_line", msg))
+                Q.put((">WS", "part", sender))
             del params, mode, sender, message
         elif msgtype == 0xfd:  # KEEP-ALIVE
             Q.put(("NINJAM", 0xfd, b""))
@@ -234,20 +228,22 @@ def irc_bot(Q, irc):
                 Q.put(("IRC", "JOIN {}".format(irc.channel)))
             elif msgtype == "PRIVMSG":
                 # NOTE: channel or private ?
+                Logger.debug(rest)
                 _, msg = rest.split(" ", 1)
                 message = msg.lstrip(":").strip()
-                chunk = "MSG\x00{}@IRC: {}\x00".format(
+                chunk = "MSG\x00{}: {}\x00".format(
                     username, message)
-                Q.put(("NINJAM", 0xc0, chunk.encode("utf-8")))
+                Q.put(("NINJAM", 0xc0, chunk.encode("cp932", "ignore")))
                 Q.put(("GUI", "add_line",
-                       "{}@IRC> {}".format(username, message)))
+                       "{}> {}".format(username, message)))
                 Q.put((">WS", "chat", username, message))
             elif msgtype == "JOIN" or msgtype == "PART":
                 username = sender_name(sender)
                 key = "{}_msg".format(msgtype.lower())
                 msg = irc.config[key].format(username=username)
                 chunk = "MSG\x00{}\x00".format(msg)
-                Q.put(("NINJAM", 0xc0, chunk.encode("utf-8")))
+                Q.put(("NINJAM", 0xc0, chunk.encode("cp932", "ignore")))  # XXX: encoding hard coded
+                Q.put(("GUI", "add_line", msg))
                 Q.put((">WS", msgtype.lower(), username))
                 Logger.info(msg)
                 del key, msg, chunk
@@ -280,6 +276,8 @@ def message_loop(queue, bot):
         if "<WS" == target:
             # XXX: bad for extensions.
             packet = ws_parse_msg(rest[0])
+            if 'flag' in packet:  # avoid echo back
+                continue
             msgtype = packet.get('type')
             username = packet.get('user', 'anon')
             text = packet.get('text', '')
@@ -293,7 +291,8 @@ def message_loop(queue, bot):
                 bot.send_irc_chat_msg(msg)
             if ninjam:
                 bot.send_ninjam_chat_msg(msg)
-            # TODO: >gui
+            if gui and username != "bot.py":  # XXX: gui username
+                gui.add_line(msg)
 
             del packet, msgtype, username, text
             continue
@@ -377,10 +376,12 @@ class AdminGui:
             elif text.startswith("/"):
                 self._shell.onecmd(text.lstrip("/"))
             else:
+                sender_name = "bot.py"
                 bot = self._bot
                 bot.send_irc_chat_msg(text)
                 bot.send_ninjam_chat_msg(text)
-                self.add_line("{}> {}".format("bot.py", text))
+                bot.send_websocket_chat_msg('chat', sender_name, text)
+                self.add_line("{}> {}".format(sender_name, text))
         finally:
             self.line.set("")
 
@@ -429,7 +430,7 @@ class Bot:
         if not self.ninjam:
             return
         chunk = "MSG\x00{}\x00".format(msg)
-        self.queue.put(("NINJAM", 0xc0, chunk.encode("utf-8")))
+        self.queue.put(("NINJAM", 0xc0, chunk.encode(self.ninjam.encoding)))
 
     def send_irc_chat_msg(self, msg):
         if not self.irc:

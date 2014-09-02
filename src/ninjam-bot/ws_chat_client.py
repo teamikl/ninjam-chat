@@ -22,7 +22,7 @@ class WSChatClientProtocol(WebSocketClientProtocol):
     def onOpen(self):
         logger.info('WebSocket connection open.')
         self.factory.client = self
-        self.factory.send_queue.put(ws_build_msg('join', 'BOT'))
+        self.factory.send_queue.put(ws_build_msg('join', self.factory.nick))
 
     def onMessage(self, payload, isBinary):
         if __debug__:
@@ -32,21 +32,22 @@ class WSChatClientProtocol(WebSocketClientProtocol):
             if __debug__:
                 logger.info('Binary message received: {} bytes'.format(len(payload)))
         else:
-            encoding = self.factory.encoding
+            chunk = payload.decode(self.factory.encoding)
             if __debug__:
-                logger.info('Text message received: {}'.format(payload.decode(encoding)))
+                logger.info('Text message received: {}'.format(chunk))
                 logger.debug("WS: {}".format(payload))
             if self.factory.queue:
-                self.factory.queue.put(("<WS", payload.decode(encoding)))
+                self.factory.queue.put(("<WS", chunk))
 
     def onClose(self, wasClean, code, reason):
         self.factory.client = None
-        self.factory.send_queue.put(ws_build_msg('part', 'BOT'))
+        self.factory.send_queue.put(ws_build_msg('part', self.factory.nick))
         logger.info('WebSocket connection closed: {}'.format(reason))
 
 
 # NOTE: use bot.cfg to override this settings.
 # here stay for default failback settings.
+DEFAULT_NICK = 'bot.py'
 DEFAULT_HOST = 'localhost'
 DEFAULT_PORT = 6789
 DEFAULT_ENCODING = 'utf-8'
@@ -71,6 +72,7 @@ def worker(queue, send_queue, config):
 
     import asyncio
     factory = WebSocketClientFactory('ws://{}:{}'.format(host, port))
+    factory.nick = config.get('nick', DEFAULT_NICK)
     factory.client = None
     factory.protocol = WSChatClientProtocol
     factory.queue = queue

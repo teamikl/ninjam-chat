@@ -13,8 +13,9 @@ def ws_pack_msg(msg, encoding='utf-8'):
 
 
 def ws_build_msg(msgtype, username, text="", *, pack=ws_pack_msg):
+    # NOTE: flag for avoid echo back ws message.
     assert msgtype in {'join', 'part', 'chat'}
-    msg = {'type': msgtype, 'user': username}
+    msg = {'type': msgtype, 'user': username, 'flag': 1}
     if text:
         msg['text'] = text
     return pack(msg)
