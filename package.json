@@ -6,7 +6,8 @@
   "scripts": {
     "test": "gulp test",
     "chat-server": "lsc ./src/chat-server/server.ls",
-    "ninjam-bot": "cd ./src/ninjam-bot && python -O bot.py"
+    "ninjam-bot": "cd ./src/ninjam-bot && python -O bot.py",
+    "make-archive": "git archive --format zip --output ./dist/ninujam-chat.zip master -9"
   },
   "author": "tea <Ikkei dot Shimomura at gmail dot com>",
   "license": "MIT",
