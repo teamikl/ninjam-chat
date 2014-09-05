@@ -8,7 +8,7 @@
     "chat-server": "lsc ./src/chat-server/server.ls",
     "ninjam-bot": "cd ./src/ninjam-bot && python -O bot.py",
     "http-proxy": "lsc ./src/http-proxy/main.ls",
-    "make-archive": "git archive --format zip --output ./dist/ninujam-chat.zip master -9"
+    "make-archive": "git archive --format zip --output ./dist/ninjam-chat.zip master -9"
   },
   "author": "tea <Ikkei dot Shimomura at gmail dot com>",
   "license": "MIT",
