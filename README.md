@@ -300,7 +300,7 @@ $ gulp
  サーバの起動スクリプトで PID をファイルに出力し、  
  終了スクリプトでは、`kill` コマンドで 起動時に記録した PID のプロセスに終了のシグナルを送る。
 
-
+> XXX: version issue `forever` require node 0.8
 
  NINJAMサーバの起動・停止も `forever` で管理すると便利です。
 
