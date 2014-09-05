@@ -54,6 +54,7 @@ $ mkdir ninjam-chat
 $ cd ninjam-chat
 ```
 
+以降は、この端末で
 
 
 ## Ubuntu 環境でのインストール
