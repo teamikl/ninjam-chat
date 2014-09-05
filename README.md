@@ -41,23 +41,117 @@
  Python と Node.js (JavaScript)
 
 
+## 作業前に
+
+これから行う作業のログを取るように環境を構築します。
 
 ```
-$ pip autobahn
+$ cd $HOME
+$ mkdir -p tmp/
+$ cd tmp
+$ script ninjam-chat-build-$(date +YYYYMMDD).log
+$ mkdir ninjam-chat
+$ cd ninjam-chat
 ```
 
+
+
+## Ubuntu 環境でのインストール
+
+ システム環境へインストールする為、root権限が必要になるかもしれませんが、
+ ユーザ権限で、sudo を使って作業します。
+
 ```
-$ npm install -g gulp forever
+$ sudo apt-get install node-legacy
+$ sudo apt-get install npm
+$ sudo apt-get install python3-tk
+$ sudo apt-get install python3-pip
 ```
 
+ Ubuntu の Node.js は `nodejs` というパッケージですが、
+ コマンドが `nodejs` になってしまい、追加で入れる 'npm' 等コマンドが、
+ そのままでは起動しません。そこで `node-legacy` パッケージをインストールします。
+
+ Ubuntu には、Pythonのバージョンが複数入ってるので、
+ 3.x 系のバージョンを使います。
+
+ `python3-tk` はオプションです。後述の設定ファイルで off に出来ます。
+ ここでは、どちらでも構いません。(GUI画面にチャットのログが出るだけです)
+
+ 依存パッケージで tk という、軽量なGUIのツールキットが入ります。
+ これが、Linux では幅広く使われてるライブラリで、
+ もし、別のバージョンが既に入ってて更新が難しい状況であれば、
+
+
+```
+$ sudo pip3 autobahn
+```
+
+ Python での WebSocket ライブラリ
+
+```
+$ sudo npm install -g gulp bower forever
+```
+
+ `gulp` `bower` `forever` の 3 つのコマンドを、
+ 環境にインストールします。`-g` は global を意味するオプション。
+
+
+### インストール後の確認作業
+
+ インストール後にまず行う作業を
+
+ - 正常にインストールされたかどうか
+ - 何処にインストールされたか
+ - アンインストール方法はどうするのか
+ - アンインストール後にクリーンな環境に戻ってるかどうかの確認方法
+
+ `script` コマンドでログを取ってると、追加でメモを取る必要はありません。
+
+```
+$ python3 --version
+$ pip3 --version
+$ node --version
+$ npm --version
+```
+
+ ２つ目以降のコマンドは、
+- 矢印の ↑ キーを押して、シェルの履歴から直前のコマンドを持ってくる
+- Ctrl-A でカーソルを行頭に移動
+- Alt-D でカーソル位置の単語を削除
+
+```
+$ which python3
+$ which pip3
+$ which node
+$ which npm
+```
+
+ ２つ目以降のコマンドは、
+- 矢印の ↑ キーを押して、シェルの履歴から直前のコマンドを持ってくる
+- Alt-B でカーソルを前の単語の頭に移動
+- Alt-D でカーソル位置の単語を削除
+
+
+## プロジェクト環境の構築
 
 次にインストールされるライブラリは、
-作業ディレクトリ以下にインストールされるので、
+作業ディレクトリの下にインストールされるので、
 
 ```
-$ npm init
-$ bower init
+$ npm install
+$ bower install
 ```
+
+ 前述の `gulp` `bower` `forever` 等のコマンドも
+ ローカル環境へインストールする事も可能でしたが、
+ このプロジェクト外でも利用することが出来るように、グローバルへ
+
+ ローカル環境へインストールした場合、コマンドのPATH等が通ってないため、
+ `$ node ./node_modules/gulp/bin/gulp.js` のように起動する必要が出てきます。
+
+ ここで install されるモジュール群は、直接コマンドから呼び出す類のものではないので
+ PATH が長くなる心配はありません。
 
 
 ```
@@ -117,7 +211,6 @@ $ npm run ninjam-bot
  パフォーマンス等が問題になることはありませんが、
  Apache 側でアクセスログを一元管理、不要なポートを開かない、
  等の理由により、
-
 
 
 ## Debug use
