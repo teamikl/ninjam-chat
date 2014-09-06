@@ -5,8 +5,13 @@ require! {
   \dateformat
 }
 
-server = ws.listen 6789 !->
-  console.log '\033[96m Server running localhost:6789 \033[39m'
+host = '0.0.0.0'
+port = 6789
+
+server = ws.listen port, !->
+  console.log "\033[96m Server running #{host}:#{port} \033[39m"
+,  do
+  host: host
 
 server.on \connection, (socket) !->
   socket
