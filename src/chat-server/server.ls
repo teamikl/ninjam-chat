@@ -19,7 +19,7 @@ server.on \connection, (socket) !->
     console.dir e
   .on \message, (data) !->
     msg = JSON.parse data
-    msg.time = dateformat new Date, 'yyyy/mm/dd HH/MM/ss'
+    msg.time = dateformat new Date, 'yyyy/mm/dd HH:MM:ss'
 
     console.log "\033[96m message recv \033[39m"
     console.dir msg
