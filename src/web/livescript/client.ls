@@ -1,17 +1,28 @@
 # chat client
+
+ws-config = new
+  @host = \localhost
+  @port = 6789
+
+user-name-key = \ninjam-chat-app-user-name
+storage = local-storage
+user-name = if storage? then storage.get-item user-name-key, "" else ""
+
+
 $ !->
+  if user-name
+    init!
+  else
+    bootbox.prompt "Name: ", (name) !->
+      user-name := if name then name else 'Guest' + Math.floor Math.random! * 100
+      storage?.set-item user-name-key, user-name
+      init!
 
-  # TODO: config
-  ws = new
-    @host = \localhost
-    @port = 6789
-
-  userName = 'Guest' + Math.floor Math.random! * 100
-
+!function init
   close_button = ->
     $ '<button/>' .addClass \close .attr {type: \button, 'data-dismiss': \alert} .append \x
 
-  ws = new WebSocket("ws://#{ws.host}:#{ws.port}/")
+  ws = new WebSocket("ws://#{ws-config.host}:#{ws-config.port}/")
   ws.onerror = (e) !->
     $(\#chat-area).empty!
       .addClass 'alert alert-error'
@@ -22,7 +33,7 @@ $ !->
     $(\#text-box).focus!
     ws.send JSON.stringify do
       type: \join
-      user: userName
+      user: user-name
 
   ws.onmessage = (evt) !->
     return if evt.data.length <= 0
@@ -59,12 +70,12 @@ $ !->
     return if text-box.val!.length <= 0
     ws.send JSON.stringify do
       type: \chat
-      user: userName
+      user: user-name
       text: text-box.val!
     text-box.val ''
 
   $(\#user-name)
-   ..append userName
+   ..append user-name
    ..on \click (evt) !->
       console.log this
       $(this).attr contenteditable: true
@@ -73,7 +84,12 @@ $ !->
         $(\#text-box).focus!
         false
    ..focusout (evt) !->
-     userName := $(this).text!.replace /(\s)/g, ''
+     name = $(this).text!.replace /(\s)/g, ''
+     if name
+       user-name := name
+       storage?.set-item user-name-key, user-name
+     else
+       $(this).text user-name
      $(\#user-name).attr contenteditable: false
 
   $(text-box).on \keypress, (evt) ->
@@ -86,4 +102,4 @@ $ !->
   window.onbeforeunload = !->
     ws.send JSON.stringify do
       type: \part
-      user: userName
+      user: user-name

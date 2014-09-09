@@ -7,6 +7,7 @@ require! {
   \gulp-clean
   \gulp-connect
   \gulp-plumber
+  \gulp-uglify
 }
 
 gulp.task \build-livescript !->
@@ -33,6 +34,10 @@ gulp.task \build-less !->
     .pipe gulp.dest './app/css'
     .pipe gulp-connect.reload!
 
+gulp.task \compact !->
+  gulp.src <[ ./bower_components/bootbox/bootbox.js ]>
+    .pipe gulp-uglify!
+    .pipe gulp.dest './app/js'
 
 gulp.task \build <[ build-jade build-less build-livescript ]>
 
@@ -45,7 +50,7 @@ gulp.task \server !->
   # TODO: ./dist
   # TODO: copy required resource from bower
   gulp-connect.server do
-    root: './'
+    root: __dirname
     livereload: true
 
 gulp.task \server-public !->

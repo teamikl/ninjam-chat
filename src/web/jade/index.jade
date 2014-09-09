@@ -12,6 +12,8 @@ block header
 block contents
   .container
     h1 #{title}
+    div
+      audio(controls, src="http://crasher.orz.hm:9000/;")
     form.form-inline#chat-area(role="form")
       .input-group
         label.input-group-addon#user-name
@@ -19,4 +21,17 @@ block contents
         input#text-box.form-control(type="text", placeholder="message")
         span.input-group-addon#send-button(role="button") Send
     ul.list-unstyled#chat-history
+
+    ul.list-group
+      li.list-group-item
+        | 埋め込みプレイヤーの再生ボタンをクリックするか、
+        | または適当なプレイヤーで #[b http://crasher.orz.hm:9000]
+        |  を開くか、もしくは適当なプレイヤーで
+        a(href="http://crasher.orz.hm:9000/listen.pls?sid=1"): b このファイル #[i.fa.fa-file-audio-o]
+        |  を開くかするとサーバー内の演奏を生放送で聞けます。
+      li.list-group-item
+        | 名前(Guest◯◯)の欄は、ダブルクリックで編集することができます。
+      li.list-group-item
+        | もし同じ音声が繰り返し再生されるような症状が起きたら、別のブラウザから再生すると回避できる場合があります。
+
   script(src="./js/client.js")
