@@ -39,7 +39,7 @@ gulp.task \compact !->
     .pipe gulp-uglify!
     .pipe gulp.dest './app/js'
 
-gulp.task \build <[ build-jade build-less build-livescript ]>
+gulp.task \build <[ build-jade build-less build-livescript compact ]>
 
 gulp.task \watch !->
   gulp.watch <[ ./src/web/jade/*.jade ./src/web/jade/**/*.jade ]> <[ build-jade ]>
