@@ -125,7 +125,7 @@ class IRCConnection:
             yield self._stream.readline().decode(self.encoding, "ignore")
 
     def sendline(self, line):
-        line = line.lstrip("\r\n").encode(self.encoding)
+        line = line.lstrip("\r\n").encode(self.encoding, "ignore")
         if __debug__:
             Logger.debug("IRC> {}".format(line))
         self._sock.sendall(line + b"\r\n")
@@ -148,7 +148,7 @@ def ninjam_bot(Q, ninjam, irc):
             if __debug__:
                 Logger.debug("{} {:08x} {:08x}".format(
                     challenge, servercaps, protover))
-            if 0x0002ffff >= protover >= 0x00020000 and servercaps == 1:
+            if 0x0002ffff >= protover >= 0x00020000 and servercaps & 1 == 1:
                 # XXX: ninbot.com servercaps 0x1e01
                 passhash = hashlib.sha1(username + b":" + password).digest()
                 passhash = hashlib.sha1(passhash + challenge).digest()
