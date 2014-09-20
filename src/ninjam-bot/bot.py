@@ -250,9 +250,9 @@ def irc_bot(Q, irc):
             else:
                 pass
         else:
-            msgtype, rest = line.split(" ", 1)
+            msgtype, *rest = line.split(" ", 1)
             if msgtype == "PING":
-                Q.put(("IRC", "PONG {}".format(rest)))
+                Q.put(("IRC", "PONG {}".format(*rest)))
             else:
                 pass
 
