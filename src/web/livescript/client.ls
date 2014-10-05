@@ -9,6 +9,16 @@ storage = local-storage
 user-name = if storage? then storage.get-item user-name-key, "" else ""
 
 
+function not-empty(line)
+  line
+
+function escape-html(text)
+  $('<div>').text(text).html!
+
+function format-chat-message(msg)
+  msg.split(/(?:\r|\n|\r\n)/).filter(not-empty).map(escape-html).join('<br>')
+
+
 $ !->
   if user-name
     init!
@@ -51,7 +61,7 @@ $ !->
         .children \div .children \i .after " #{data.user} join a room"
     | \chat =>
       item.addClass 'well well-small'
-        .append $('<div/>').text data.text
+        .append $('<div/>').html format-chat-message(data.text)
         .children \div .children \i .after " #{data.user}"
     | \part =>
       item.addClass 'alert alert-warning'
