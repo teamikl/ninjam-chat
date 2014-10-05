@@ -34,6 +34,10 @@ from util import ws_build_msg, ws_parse_msg, queue_loop, untuple
 Logger = logging.getLogger(__file__)
 
 
+# Exit code for launch shell script will restart
+EXIT_RESTART = 3
+
+
 ##
 # NetMsg structure header
 # 1 byte for message type
@@ -67,6 +71,7 @@ class NINJAMConnection:
             if len(header) < 5:
                 if __debug__:
                     Logger.debug("NINJAM Connection lost")
+                os._exit(EXIT_RESTART)
                 break
             msgtype, msglen = NetMsg.unpack(header)
             msgbody = read(msglen) if msglen > 0 else b''
@@ -75,7 +80,13 @@ class NINJAMConnection:
     def sendmsg(self, msgtype, msg):
         if __debug__:
             Logger.debug("NINJAM>{:02X} {}".format(msgtype, msg))
-        self._sock.sendall(NetMsg.pack(msgtype, len(msg)) + msg)
+        try:
+            self._sock.sendall(NetMsg.pack(msgtype, len(msg)) + msg)
+        except:
+            import traceback
+            traceback.print_exc()
+            os._exit(EXIT_RESTART)
+
 
     @staticmethod
     def _parse_user_info(data, offset=0):
@@ -128,7 +139,12 @@ class IRCConnection:
         line = line.lstrip("\r\n").encode(self.encoding, "ignore")
         if __debug__:
             Logger.debug("IRC> {}".format(line))
-        self._sock.sendall(line + b"\r\n")
+        try:
+            self._sock.sendall(line + b"\r\n")
+        except:
+            import traceback
+            traceback.print_exc()
+            os._exit(EXIT_RESTART)
 
 
 # XXX: separate "irc" argument, remove the dependency.
