@@ -181,9 +181,10 @@ def ninjam_bot(Q, ninjam, irc):
                 if __debug__:
                     Logger.debug("{} {}".format(username, ninjam.username))
                 if username != ninjam.username.split(":")[-1]:
-                    msg = "{}> {}".format(sender, message)
                     if irc:
-                        Q.put(("IRC", "PRIVMSG {} :{}".format(irc.channel, msg)))
+                        for line in message.splitlines():
+                            msg = "{}> {}".format(sender, line)
+                            Q.put(("IRC", "PRIVMSG {} :{}".format(irc.channel, msg)))
                     Q.put(("GUI", "add_line", message))
                     Q.put((">WS", "chat", username, message))
             elif mode == b"JOIN":
