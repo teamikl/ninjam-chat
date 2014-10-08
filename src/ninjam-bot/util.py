@@ -31,3 +31,8 @@ def queue_loop(queue):
 
 # XXX: this was for 2.x
 untuple = lambda x, *xs: (x, xs)
+
+
+import functools
+import unicodedata
+normalize = functools.partial(unicodedata.normalize, 'NFKC')
