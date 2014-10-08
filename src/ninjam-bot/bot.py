@@ -164,8 +164,13 @@ def ninjam_bot(Q, ninjam, irc):
             if __debug__:
                 Logger.debug("{} {:08x} {:08x}".format(
                     challenge, servercaps, protover))
-            if 0x0002ffff >= protover >= 0x00020000 and servercaps & 1 == 1:
-                # XXX: ninbot.com servercaps 0x1e01
+            if 0x0002ffff >= protover >= 0x00020000 and servercaps & 1:
+
+                # keep-alive (minimam keep-alive is 3)
+                keep_alive_interval = max((servercaps >> 8) & 0xff, 3)
+                ninjam_start_keep_alive_timer(Q, keep_alive_interval)
+                print("{:02X}".format(servercaps))
+
                 passhash = hashlib.sha1(username + b":" + password).digest()
                 passhash = hashlib.sha1(passhash + challenge).digest()
                 # CLIENT AUTH USER
@@ -197,9 +202,10 @@ def ninjam_bot(Q, ninjam, irc):
                 if __debug__:
                     Logger.debug("{} {}".format(username, ninjam.username))
                 if username != ninjam.username.split(":")[-1]:
-                    msg = "{}> {}".format(sender, message)
                     if irc:
-                        Q.put(("IRC", "PRIVMSG {} :{}".format(irc.channel, msg)))
+                        for line in message.splitlines():
+                            msg = "{}> {}".format(sender, line)
+                            Q.put(("IRC", "PRIVMSG {} :{}".format(irc.channel, msg)))
                     Q.put(("GUI", "add_line", message))
                     Q.put((">WS", "chat", username, message))
             elif mode == b"JOIN":
@@ -220,7 +226,8 @@ def ninjam_bot(Q, ninjam, irc):
                 Q.put((">WS", "part", sender))
             del params, mode, sender, message
         elif msgtype == 0xfd:  # KEEP-ALIVE
-            Q.put(("NINJAM", 0xfd, b""))
+            # TODO: check expire here
+            pass
         else:
             break
 
@@ -274,6 +281,14 @@ def irc_bot(Q, irc):
 
 
 def message_loop(queue, bot):
+    # XXX: Just wrap tk frame is closed
+    try:
+        _message_loop(queue, bot)
+    except EOFError:
+        os._exit(0)
+
+
+def _message_loop(queue, bot):
     """
     TODO: Observer pattern for multi notification
     """
@@ -455,6 +470,28 @@ class Bot:
         self.queue.put(("IRC", line.strip()))
 
 
+def ninjam_start_keep_alive_timer(Q, interval):
+    thread = make_daemon_thread(
+                target=ninjam_keep_alive_timer,
+                args=(Q, interval))
+    thread.start()
+    Logger.info("KeepAlive timer started (interval {})".format(interval))
+    return thread
+
+
+def ninjam_keep_alive_timer(Q, interval):
+    import time
+    while 1:
+        time.sleep(interval)
+        Q.put(("NINJAM", 0xfd, b""))
+
+
+def make_daemon_thread(**kw):
+    thread = Thread(**kw)
+    thread.setDaemon(True)
+    return thread
+
+
 def main():
     # init logging
     LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -508,11 +545,6 @@ def main():
     queue = Queue()
     bot = Bot(queue=queue)
     shell = AdminShell(bot=bot)
-
-    def make_daemon_thread(**kw):
-        thread = Thread(**kw)
-        thread.setDaemon(True)
-        return thread
 
     if int(config_enable['tk']):
         gui = bot.gui = AdminGui(queue=queue, shell=shell, bot=bot)
