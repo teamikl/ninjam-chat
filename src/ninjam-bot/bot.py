@@ -265,6 +265,14 @@ def irc_bot(Q, irc):
 
 
 def message_loop(queue, bot):
+    # XXX: Just wrap tk frame is closed
+    try:
+        _message_loop(queue, bot)
+    except EOFError:
+        os._exit(0)
+
+
+def _message_loop(queue, bot):
     """
     TODO: Observer pattern for multi notification
     """
