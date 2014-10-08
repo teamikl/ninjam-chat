@@ -67,6 +67,9 @@ $ !->
       item.addClass 'alert alert-warning'
         .prepend close_button!
         .children \div .children \i .after " #{data.user} left a room"
+    | \topic =>
+      # TODO
+      $('#topic').append $('<pre>').html format-chat-message(data.text)
     | otherwise =>
       item.addClass 'alert alert-error'
         .children \div .children \i .removeClass 'fa fa-user' .addClass '\fa fa-warning'

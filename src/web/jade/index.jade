@@ -11,9 +11,14 @@ block header
 
 block contents
   .container
-    h1 #{title}
-    div
+    .page-header
+      h1 #{title}
       audio(controls, src="http://crasher.orz.hm:9000/;")
+    div.well#sticky
+      h2#topic Title test
+      pre#chords
+        | C | D | E | F
+        | G | A | B | C
     form.form-horizontal#chat-area(role="form")
       .input-group
         label.input-group-addon#user-name
