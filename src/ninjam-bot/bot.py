@@ -29,7 +29,8 @@ from threading import Thread
 from multiprocessing import Process, JoinableQueue as Queue
 from configparser import ConfigParser
 
-from util import ws_build_msg, ws_parse_msg, queue_loop, untuple
+from util import ws_build_msg, ws_parse_msg, queue_loop, untuple, normalize
+
 
 Logger = logging.getLogger(__file__)
 
@@ -198,7 +199,7 @@ def ninjam_bot(Q, ninjam, irc):
             if mode == b"MSG":
                 # NOTE: skip self message
                 username = sender.split("@", 1)[0]
-                message = message.decode(ninjam.encoding, 'ignore')
+                message = normalize(message.decode(ninjam.encoding, 'ignore'))
                 if __debug__:
                     Logger.debug("{} {}".format(username, ninjam.username))
                 if username != ninjam.username.split(":")[-1]:
@@ -253,10 +254,10 @@ def irc_bot(Q, irc):
                 # NOTE: channel or private ?
                 Logger.debug(rest)
                 _, msg = rest.split(" ", 1)
-                message = msg.lstrip(":").strip()
+                message = normalize(msg.lstrip(":").strip())
                 chunk = "MSG\x00{}: {}\x00".format(
-                    username, message)
-                Q.put(("NINJAM", 0xc0, chunk.encode("cp932", "ignore")))
+                    username, message).encode("cp932", "ignore")
+                Q.put(("NINJAM", 0xc0, chunk))
                 Q.put(("GUI", "add_line",
                        "{}> {}".format(username, message)))
                 Q.put((">WS", "chat", username, message))
@@ -310,8 +311,8 @@ def _message_loop(queue, bot):
             if 'flag' in packet:  # avoid echo back
                 continue
             msgtype = packet.get('type')
-            username = packet.get('user', 'anon')
-            text = packet.get('text', '')
+            username = normalize(packet.get('user', 'anon'))
+            text = normalize(packet.get('text', ''))
             msg = None
             if msgtype == 'join' or msgtype == 'part':
                 msg = "{} {}".format(username, msgtype)
@@ -401,7 +402,7 @@ class AdminGui:
 
     def on_return(self, evt):
         try:
-            text = self.line.get()
+            text = normalize(self.line.get())
             if text == "/quit":
                 self.root.after(100, self.root.quit)
             elif text.startswith("/"):
