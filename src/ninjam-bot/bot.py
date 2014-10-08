@@ -34,6 +34,10 @@ from util import ws_build_msg, ws_parse_msg, queue_loop, untuple
 Logger = logging.getLogger(__file__)
 
 
+# Exit code for launch shell script will restart
+EXIT_RESTART = 3
+
+
 ##
 # NetMsg structure header
 # 1 byte for message type
@@ -67,6 +71,7 @@ class NINJAMConnection:
             if len(header) < 5:
                 if __debug__:
                     Logger.debug("NINJAM Connection lost")
+                os._exit(EXIT_RESTART)
                 break
             msgtype, msglen = NetMsg.unpack(header)
             msgbody = read(msglen) if msglen > 0 else b''
@@ -75,7 +80,13 @@ class NINJAMConnection:
     def sendmsg(self, msgtype, msg):
         if __debug__:
             Logger.debug("NINJAM>{:02X} {}".format(msgtype, msg))
-        self._sock.sendall(NetMsg.pack(msgtype, len(msg)) + msg)
+        try:
+            self._sock.sendall(NetMsg.pack(msgtype, len(msg)) + msg)
+        except:
+            import traceback
+            traceback.print_exc()
+            os._exit(EXIT_RESTART)
+
 
     @staticmethod
     def _parse_user_info(data, offset=0):
@@ -128,7 +139,12 @@ class IRCConnection:
         line = line.lstrip("\r\n").encode(self.encoding, "ignore")
         if __debug__:
             Logger.debug("IRC> {}".format(line))
-        self._sock.sendall(line + b"\r\n")
+        try:
+            self._sock.sendall(line + b"\r\n")
+        except:
+            import traceback
+            traceback.print_exc()
+            os._exit(EXIT_RESTART)
 
 
 # XXX: separate "irc" argument, remove the dependency.
@@ -148,8 +164,13 @@ def ninjam_bot(Q, ninjam, irc):
             if __debug__:
                 Logger.debug("{} {:08x} {:08x}".format(
                     challenge, servercaps, protover))
-            if 0x0002ffff >= protover >= 0x00020000 and servercaps & 1 == 1:
-                # XXX: ninbot.com servercaps 0x1e01
+            if 0x0002ffff >= protover >= 0x00020000 and servercaps & 1:
+
+                # keep-alive (minimam keep-alive is 3)
+                keep_alive_interval = max((servercaps >> 8) & 0xff, 3)
+                ninjam_start_keep_alive_timer(Q, keep_alive_interval)
+                print("{:02X}".format(servercaps))
+
                 passhash = hashlib.sha1(username + b":" + password).digest()
                 passhash = hashlib.sha1(passhash + challenge).digest()
                 # CLIENT AUTH USER
@@ -205,7 +226,8 @@ def ninjam_bot(Q, ninjam, irc):
                 Q.put((">WS", "part", sender))
             del params, mode, sender, message
         elif msgtype == 0xfd:  # KEEP-ALIVE
-            Q.put(("NINJAM", 0xfd, b""))
+            # TODO: check expire here
+            pass
         else:
             break
 
@@ -259,6 +281,14 @@ def irc_bot(Q, irc):
 
 
 def message_loop(queue, bot):
+    # XXX: Just wrap tk frame is closed
+    try:
+        _message_loop(queue, bot)
+    except EOFError:
+        os._exit(0)
+
+
+def _message_loop(queue, bot):
     """
     TODO: Observer pattern for multi notification
     """
@@ -440,6 +470,28 @@ class Bot:
         self.queue.put(("IRC", line.strip()))
 
 
+def ninjam_start_keep_alive_timer(Q, interval):
+    thread = make_daemon_thread(
+                target=ninjam_keep_alive_timer,
+                args=(Q, interval))
+    thread.start()
+    Logger.info("KeepAlive timer started (interval {})".format(interval))
+    return thread
+
+
+def ninjam_keep_alive_timer(Q, interval):
+    import time
+    while 1:
+        time.sleep(interval)
+        Q.put(("NINJAM", 0xfd, b""))
+
+
+def make_daemon_thread(**kw):
+    thread = Thread(**kw)
+    thread.setDaemon(True)
+    return thread
+
+
 def main():
     # init logging
     LOG_FORMAT = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -493,11 +545,6 @@ def main():
     queue = Queue()
     bot = Bot(queue=queue)
     shell = AdminShell(bot=bot)
-
-    def make_daemon_thread(**kw):
-        thread = Thread(**kw)
-        thread.setDaemon(True)
-        return thread
 
     if int(config_enable['tk']):
         gui = bot.gui = AdminGui(queue=queue, shell=shell, bot=bot)
