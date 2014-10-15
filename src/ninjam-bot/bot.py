@@ -200,6 +200,7 @@ def ninjam_bot(Q, ninjam, irc):
             if mode == b"MSG":
                 # NOTE: skip self message
                 username = sender.split("@", 1)[0]
+                username = username if username else 'BOT' # XXX: ws.config
                 message = normalize(message.decode(ninjam.encoding, 'ignore'))
                 if __debug__:
                     Logger.debug("{} {}".format(username, ninjam.username))
