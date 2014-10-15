@@ -12,8 +12,6 @@ Usage:
 __author__ = 'tea <Ikkei.Shimomura at gmail dot com>'
 __version__ = '0.4.0'
 
-# TODO: JOIN/PART for gui console
-
 import io
 import os
 import re
@@ -78,6 +76,10 @@ class NINJAMConnection:
             msgbody = read(msglen) if msglen > 0 else b''
             yield msgtype, msgbody
 
+    def sendchatmsg(self, msg):
+        msg = "MSG\x00{}\x00".format(msg).encode(self.encoding, 'ignore')
+        self.sendmsg(0xc0, msg)
+
     def sendmsg(self, msgtype, msg):
         if __debug__:
             Logger.debug("NINJAM>{:02X} {}".format(msgtype, msg))
@@ -87,7 +89,6 @@ class NINJAMConnection:
             import traceback
             traceback.print_exc()
             os._exit(EXIT_RESTART)
-
 
     @staticmethod
     def _parse_user_info(data, offset=0):
@@ -253,24 +254,21 @@ def irc_bot(Q, irc):
             elif msgtype == "PRIVMSG":
                 # NOTE: channel or private ?
                 Logger.debug(rest)
-                _, msg = rest.split(" ", 1)
+                msg = rest.split(" ", 1)[-1]
                 message = normalize(msg.lstrip(":").strip())
-                chunk = "MSG\x00{}: {}\x00".format(
-                    username, message).encode("cp932", "ignore")
-                Q.put(("NINJAM", 0xc0, chunk))
+                Q.put(("NINJAM-MSG", "{}: {}".format(username, message)))
                 Q.put(("GUI", "add_line",
                        "{}> {}".format(username, message)))
                 Q.put((">WS", "chat", username, message))
+                del msg, message
             elif msgtype == "JOIN" or msgtype == "PART":
-                username = sender_name(sender)
                 key = "{}_msg".format(msgtype.lower())
                 msg = irc.config[key].format(username=username)
-                chunk = "MSG\x00{}\x00".format(msg)
-                Q.put(("NINJAM", 0xc0, chunk.encode("cp932", "ignore")))  # XXX: encoding hard coded
+                Q.put(("NINJAM-MSG", msg))
                 Q.put(("GUI", "add_line", msg))
                 Q.put((">WS", msgtype.lower(), username))
                 Logger.info(msg)
-                del key, msg, chunk
+                del key, msg
             else:
                 pass
         else:
@@ -334,6 +332,8 @@ def _message_loop(queue, bot):
 
         if target == "NINJAM" and ninjam:
             ninjam.sendmsg(*rest)
+        if target == "NINJAM-MSG" and ninjam:
+            ninjam.sendchatmsg(*rest)
         elif target == "IRC" and irc:
             irc.sendline(*rest)
         elif target == "GUI" and gui:
