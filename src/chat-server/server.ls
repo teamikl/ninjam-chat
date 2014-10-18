@@ -13,18 +13,30 @@ server = ws.listen port, !->
 ,  do
   host: host
 
+process.on \uncaughtException, (e) !->
+  console.error "uncaughtException: #{e}"
+
 server.on \connection, (socket) !->
   socket
   .on \error, (e) !->
-    console.dir e
+    console.error e.message
   .on \message, (data) !->
-    msg = JSON.parse data
+
+    msg = try
+      JSON.parse data
+    catch
+      console.error e.message
+    return unless msg
+
     msg.time = dateformat new Date, 'yyyy/mm/dd HH:MM:ss'
 
-    console.log "\033[96m message recv \033[39m"
-    console.dir msg
+    console.log msg
 
-    chunk = JSON.stringify msg
+    chunk = try
+      JSON.stringify msg
+    catch
+      console.error e.message
+    return unless chunk
 
     server.clients.forEach (client) ->
       client?.send chunk
