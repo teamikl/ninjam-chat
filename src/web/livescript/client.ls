@@ -67,6 +67,11 @@ $ !->
       item.addClass 'alert alert-warning'
         .prepend close_button!
         .children \div .children \i .after " #{data.user} left a room"
+    | \topic =>
+      [topic, ...chords] = data.text.split(/\n/)
+      $('#topic').html escape-html(topic)
+      $('#chords').html format-chat-message(chords.join("\n"))
+
     | otherwise =>
       item.addClass 'alert alert-error'
         .children \div .children \i .removeClass 'fa fa-user' .addClass '\fa fa-warning'
