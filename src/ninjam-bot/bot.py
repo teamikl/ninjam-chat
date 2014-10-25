@@ -27,7 +27,9 @@ from threading import Thread
 from multiprocessing import Process, JoinableQueue as Queue
 from configparser import ConfigParser
 
-from util import ws_build_msg, ws_parse_msg, queue_loop, untuple, normalize
+from util import (
+  ws_build_msg, ws_parse_msg, queue_loop,
+  untuple, normalize, is_topic_message)
 
 
 Logger = logging.getLogger(__file__)
@@ -211,6 +213,8 @@ def ninjam_bot(Q, ninjam, irc):
                             Q.put(("IRC", "PRIVMSG {} :{}".format(irc.channel, msg)))
                     Q.put(("GUI", "add_line", message))
                     Q.put((">WS", "chat", username, message))
+                    if is_topic_message(message):
+                        Q.put((">WS", "topic", username, message))
             elif mode == b"JOIN":
                 ninjam.users[sender] = 1
                 msg = ninjam.config["join_msg"].format(username=sender)
