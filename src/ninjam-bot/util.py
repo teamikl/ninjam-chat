@@ -25,8 +25,11 @@ def queue_loop(queue):
     for task in iter(queue.get, None):
         yield task
         queue.task_done()
-    else:
-        queue.task_done()
+
+
+def is_topic_message(msg):
+    _, *xs = msg.splitlines()
+    return xs and all(x.lstrip().startswith('|') for x in xs)
 
 
 # XXX: this was for 2.x
