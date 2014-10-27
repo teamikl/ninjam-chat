@@ -36,7 +36,7 @@ $ !->
   ws.onerror = (e) !->
     $(\#chat-area).empty!
       .addClass 'alert alert-error'
-      .append close_button!, $('<i/>').addClass(\fa.fa-warning), 'Could not connect to server'
+      .append close_button!, $('<i/>').addClass('fa fa-warning'), 'Could not connect to server'
 
   ws.onopen = !->
     # NOTE: ws still connection state, 'send' fail
@@ -74,7 +74,7 @@ $ !->
 
     | otherwise =>
       item.addClass 'alert alert-error'
-        .children \div .children \i .removeClass 'fa fa-user' .addClass '\fa fa-warning'
+        .children \div .children \i .removeClass 'fa fa-user' .addClass 'fa fa-warning'
         .after 'Recv invalid message'
 
     $(\#chat-history).prepend (item .hide! .fadeIn 1000)
