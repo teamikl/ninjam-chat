@@ -355,7 +355,7 @@ def _message_loop(queue, bot):
         elif target == "NINJAM-MSG" and ninjam:
             ninjam.sendchatmsg(*rest)
         elif target == "NINJAM-PRIVMSG" and ninjam:
-            ninjam.sendprovmsg(*rest)
+            ninjam.sendprivmsg(*rest)
         elif target == "IRC" and irc:
             irc.sendline(*rest)
         elif target == "GUI" and gui:
