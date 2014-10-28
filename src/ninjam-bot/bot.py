@@ -64,7 +64,7 @@ class NINJAMConnection:
         self.password = password
         self.encoding = encoding
         self.config = config
-        self.topic = None
+        self.topic = None # NOTE: belong main message loop, don't update in client
         self.users = {}
 
     def message_loop(self):
@@ -221,8 +221,11 @@ def ninjam_bot(Q, ninjam, irc):
                     Q.put(("GUI", "add_line", message))
                     Q.put((">WS", "chat", username, message))
                     if is_topic_message(message):
-                        ninjam.topic = message
-                        Q.put((">WS", "topic", "", ninjam.topic))
+                        Q.put(("NINJAM-SET-TOPIC", message))
+                        Q.put((">WS", "topic", "", "{topic:}"))
+                    elif message.startswith("88888"):
+                        Q.put(("NINJAM-SET-TOPIC", ""))
+                        Q.put((">WS", "topic", "", ""))
             elif mode == b"JOIN":
                 ninjam.users[sender] = 1
                 msg = ninjam.config["join_msg"].format(username=sender)
@@ -231,8 +234,7 @@ def ninjam_bot(Q, ninjam, irc):
                     Logger.info(msg)
                 Q.put(("GUI", "add_line", msg))
                 Q.put((">WS", "join", sender))
-                if ninjam.topic:
-                    Q.put(("NINJAM-PRIVMSG", sender, ninjam.topic))
+                Q.put(("NINJAM-PRIVMSG-TOPIC", sender, "{topic:}"))
 
             elif mode == b"PART":
                 del ninjam.users[sender]
@@ -339,7 +341,7 @@ def _message_loop(queue, bot):
             if ninjam:
                 bot.send_ninjam_chat_msg(msg)
                 if msgtype == 'join' and ninjam.topic:
-                    queue.put((">WS", "topic", "", ninjam.topic))
+                    queue.put((">WS", "topic", "", "{topic:}"))
 
             if gui and username != "bot.py":  # XXX: gui username
                 gui.add_line(msg)
@@ -347,6 +349,11 @@ def _message_loop(queue, bot):
             del packet, msgtype, username, text
             continue
         elif target == ">WS" and ws:
+            msgtype = rest[0]
+            if msgtype == 'topic' and ninjam.topic:
+                assert len(rest) == 3
+                msgtype, sender, msg = rest
+                rest = (msgtype, sender, msg.format(topic=ninjam.topic))
             bot.send_websocket_chat_msg(*rest)
             continue
 
@@ -354,8 +361,13 @@ def _message_loop(queue, bot):
             ninjam.sendmsg(*rest)
         elif target == "NINJAM-MSG" and ninjam:
             ninjam.sendchatmsg(*rest)
-        elif target == "NINJAM-PRIVMSG" and ninjam:
-            ninjam.sendprivmsg(*rest)
+        elif target == "NINJAM-SET-TOPIC" and ninjam:
+            ninjam.topic = rest[0]
+        elif target == "NINJAM-PRIVMSG-TOPIC" and ninjam:
+            assert len(rest) == 2
+            if ninjam.topic:
+                sender, message = rest
+                ninjam.sendprivmsg(sender, message.format(topic=ninjam.topic))
         elif target == "IRC" and irc:
             irc.sendline(*rest)
         elif target == "GUI" and gui:
