@@ -68,9 +68,13 @@ $ !->
         .prepend close_button!
         .children \div .children \i .after " #{data.user} left a room"
     | \topic =>
-      [topic, ...chords] = data.text.split(/\n/)
-      $('#topic').html escape-html(topic)
-      $('#chords').html format-chat-message(chords.join("\n"))
+      if data.text
+        [topic, ...chords] = data.text.split(/\n/)
+        $('#topic').html escape-html(topic)
+        $('#chords').html format-chat-message(chords.join("\n"))
+      else
+        $('#topic').html ""
+        $('#chords').html ""
       item = null
       return
 
