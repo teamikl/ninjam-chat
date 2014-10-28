@@ -71,6 +71,8 @@ $ !->
       [topic, ...chords] = data.text.split(/\n/)
       $('#topic').html escape-html(topic)
       $('#chords').html format-chat-message(chords.join("\n"))
+      item = null
+      return
 
     | otherwise =>
       item.addClass 'alert alert-error'
