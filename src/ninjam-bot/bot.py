@@ -496,7 +496,7 @@ class Bot:
         if not self.ninjam:
             return
         chunk = "MSG\x00{}\x00".format(msg)
-        self.queue.put(("NINJAM", 0xc0, chunk.encode(self.ninjam.encoding)))
+        self.queue.put(("NINJAM", 0xc0, chunk.encode(self.ninjam.encoding, "ignore")))
 
     def send_irc_chat_msg(self, msg):
         if not self.irc:
